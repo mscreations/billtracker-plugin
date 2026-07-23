@@ -35,9 +35,8 @@ type manifest struct {
 }
 
 const (
-	pluginID      = "bill-tracker"
-	pluginName    = "Bill Tracker"
-	pluginVersion = "2.0.0"
+	pluginID   = "bill-tracker"
+	pluginName = "Bill Tracker"
 
 	// viewIcon is a small hand-rolled inline SVG (receipt/dollar icon),
 	// trusted verbatim by hhq and rendered directly into the kiosk nav
@@ -53,7 +52,7 @@ func (a *App) Manifest(w http.ResponseWriter, r *http.Request) {
 	m := manifest{
 		ID:      pluginID,
 		Name:    pluginName,
-		Version: pluginVersion,
+		Version: a.Version,
 		View: manifestView{
 			Enabled: true,
 			Label:   "Bills",
