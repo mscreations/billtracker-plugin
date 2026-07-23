@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -36,6 +37,59 @@ const (
 	claimTimeout    = 15 * time.Second
 	accountsTimeout = 20 * time.Second
 )
+
+// InsecureTestMode disables both the https-only requirement and the
+// private/loopback/link-local/multicast dial block below. Exported (despite
+// the risk of misuse) solely so other packages' tests exercising code paths
+// that call into this package (e.g. internal/scheduler's SimpleFIN tests)
+// can point at a local httptest server, same as this package's own tests
+// (see client_test.go's withInsecureTestMode) - never set outside a test.
+var InsecureTestMode = false
+
+// httpClient dials through safeDialContext instead of using
+// http.DefaultClient - both the claim URL (decoded from a "setup token" a
+// parent pastes into the settings page) and the access URL (persisted from
+// a prior claim) are fully attacker-controlled from this package's point of
+// view, so every outbound request in this file needs to go through this
+// client to guard against SSRF into internal network targets.
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: safeDialContext,
+	},
+}
+
+// safeDialContext resolves the target host and refuses to connect if the
+// address it actually dials is loopback/private/link-local/multicast -
+// resolving and checking the IP at dial time (rather than validating a URL
+// up front) closes the DNS-rebinding gap where a host could resolve to a
+// public IP at validation time and a private one moments later.
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return nil, fmt.Errorf("resolving %q: %w", host, err)
+	}
+	var chosen net.IP
+	for _, ip := range ips {
+		if InsecureTestMode || !isDisallowedIP(ip) {
+			chosen = ip
+			break
+		}
+	}
+	if chosen == nil {
+		return nil, fmt.Errorf("host %q has no allowed address (refusing loopback/private/link-local/multicast targets)", host)
+	}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	return dialer.DialContext(ctx, network, net.JoinHostPort(chosen.String(), port))
+}
+
+func isDisallowedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
+}
 
 // ClaimSetupToken exchanges a one-time SimpleFIN setup token (as pasted by
 // the parent into the settings page) for a persistent access URL. The setup
@@ -49,8 +103,15 @@ func ClaimSetupToken(ctx context.Context, setupToken string) (string, error) {
 		return "", fmt.Errorf("setup token is not valid base64: %w", err)
 	}
 	claimURL := string(claimURLBytes)
-	if _, err := url.ParseRequestURI(claimURL); err != nil {
+	parsedClaimURL, err := url.ParseRequestURI(claimURL)
+	if err != nil {
 		return "", fmt.Errorf("decoded setup token is not a valid URL: %w", err)
+	}
+	// Credentials travel back from the bridge over this same connection
+	// (see ClaimSetupToken's doc comment - the access URL embeds HTTP Basic
+	// Auth), so a plaintext http:// target would leak them; require https.
+	if !InsecureTestMode && parsedClaimURL.Scheme != "https" {
+		return "", fmt.Errorf("decoded setup token URL must use https")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, claimTimeout)
@@ -60,7 +121,7 @@ func ClaimSetupToken(ctx context.Context, setupToken string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("claiming setup token: %w", err)
 	}
@@ -118,6 +179,9 @@ func FetchAccounts(ctx context.Context, accessURL string) ([]Account, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid access URL: %w", err)
 	}
+	if !InsecureTestMode && u.Scheme != "https" {
+		return nil, fmt.Errorf("access URL must use https")
+	}
 	q := u.Query()
 	q.Set("balances-only", "1")
 	u.RawQuery = q.Encode()
@@ -131,7 +195,7 @@ func FetchAccounts(ctx context.Context, accessURL string) ([]Account, error) {
 		req.SetBasicAuth(u.User.Username(), password)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching accounts: %w", err)
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/mscreations/billtracker-plugin/internal/config"
 	"github.com/mscreations/billtracker-plugin/internal/connectors"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/simplefin"
 	"github.com/mscreations/billtracker-plugin/internal/testutil"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 )
@@ -175,6 +176,8 @@ func TestRefreshSimpleFinNowDecryptFailure(t *testing.T) {
 }
 
 func TestRefreshSimpleFinNowFetchAccountsFailure(t *testing.T) {
+	simplefin.InsecureTestMode = true
+	t.Cleanup(func() { simplefin.InsecureTestMode = false })
 	s := newTestScheduler(t)
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
@@ -200,6 +203,8 @@ func TestRefreshSimpleFinNowFetchAccountsFailure(t *testing.T) {
 }
 
 func TestRefreshSimpleFinNowSuccess(t *testing.T) {
+	simplefin.InsecureTestMode = true
+	t.Cleanup(func() { simplefin.InsecureTestMode = false })
 	s := newTestScheduler(t)
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -238,6 +243,8 @@ func TestRefreshSimpleFinNowSuccess(t *testing.T) {
 }
 
 func TestRefreshSimpleFinNowUpsertFailureIsLoggedAndContinues(t *testing.T) {
+	simplefin.InsecureTestMode = true
+	t.Cleanup(func() { simplefin.InsecureTestMode = false })
 	s := newTestScheduler(t)
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
