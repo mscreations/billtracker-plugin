@@ -1,0 +1,24 @@
+{{/*
+  Top-level GET /view response. Fetched server-to-server by hhq when a
+  parent/child taps this plugin's kiosk nav button, and inlined into hhq's
+  full-screen content region (see internal/handlers/view.go) - never loaded
+  by a browser directly, so all styling below is self-contained inline
+  <style>, not a <link href> to a static file (the plugin's own base_url may
+  not be reachable from the parent's browser at all).
+*/}}
+{{define "view"}}
+<style>
+  .bt-view { font-family: inherit; color: inherit; display: flex; gap: 3vw; height: 100%; }
+  .bt-view-col { flex: 1 1 0; min-width: 0; }
+  .bt-view h2 { margin: 0 0 1.5vh 0; font-size: 1.6vw; color: #9aa3af; text-transform: uppercase; letter-spacing: 0.05em; }
+  .bt-view-table { width: 100%; border-collapse: collapse; font-size: 1.2vw; }
+  .bt-view-table th, .bt-view-table td { text-align: left; padding: 0.8vh 0.6vw; border-bottom: 1px solid #2a2f38; }
+  .bt-view-table tr.overdue td { color: #ef4444; }
+  .bt-empty { color: #9aa3af; font-style: italic; }
+  .bt-balance-org { color: #9aa3af; font-size: 0.45em; }
+</style>
+<div class="bt-view">
+  <div class="bt-view-col">{{template "view/_bills" .}}</div>
+  <div class="bt-view-col">{{template "view/_balances" .}}</div>
+</div>
+{{end}}

@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Electric",
+    "amount": 128.43,
+    "schedule": "monthly",
+    "day_of_month": 5
+  },
+  {
+    "name": "Internet",
+    "amount": 79.99,
+    "schedule": "monthly",
+    "day_of_month": 12,
+    "vendor_url": "https://example-isp.com/pay"
+  },
+  {
+    "name": "Pest control",
+    "amount": 135.00,
+    "schedule": "quarterly",
+    "day_of_month": 15,
+    "quarter_start_month": 2
+  },
+  {
+    "name": "Annual insurance premium",
+    "amount": 612.00,
+    "schedule": "one_off",
+    "one_off_date": "2026-09-01"
+  }
+]

@@ -1,0 +1,43 @@
+{{define "settings/_bill_form"}}
+<h2>Add a bill</h2>
+<form method="POST" action="">
+  <input type="hidden" name="action" value="add_bill">
+  <div class="field">
+    <label>Name</label>
+    <input type="text" name="name" placeholder="Electric" required>
+  </div>
+  <div class="field">
+    <label>Amount (USD)</label>
+    <input type="number" name="amount" step="0.01" placeholder="128.43" required>
+  </div>
+  <div class="field">
+    <label>Schedule</label>
+    <select name="schedule" class="schedule-select">
+      <option value="monthly">Monthly</option>
+      <option value="quarterly">Quarterly</option>
+      <option value="one_off">One-off</option>
+    </select>
+  </div>
+  <div class="field" data-show-for="monthly,quarterly">
+    <label>Day of month</label>
+    <input type="number" name="day_of_month" min="1" max="31" placeholder="5">
+  </div>
+  <div class="field" data-show-for="quarterly">
+    <label>Quarter rotation</label>
+    <select name="quarter_start_month">
+      <option value="1">Jan / Apr / Jul / Oct</option>
+      <option value="2">Feb / May / Aug / Nov</option>
+      <option value="3">Mar / Jun / Sep / Dec</option>
+    </select>
+  </div>
+  <div class="field" data-show-for="one_off">
+    <label>Due date</label>
+    <input type="date" name="one_off_date">
+  </div>
+  <div class="field">
+    <label>Vendor bill-pay link (optional)</label>
+    <input type="text" name="vendor_url" placeholder="https://...">
+  </div>
+  <button type="submit">Add</button>
+</form>
+{{end}}

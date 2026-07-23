@@ -1,0 +1,57 @@
+{{define "settings/_simplefin"}}
+<h2>SimpleFIN Bridge (bank balances)</h2>
+{{if .SimpleFinConnected}}
+  <p>
+    Connected.
+    {{if .SimpleFinLastSynced}}Last synced {{.SimpleFinLastSynced}}.{{else}}Not yet synced.{{end}}
+    {{if .SimpleFinLastError}}<br><span style="color:#ef4444">Last error: {{.SimpleFinLastError}}</span>{{end}}
+  </p>
+
+  <table>
+    <tr><th>Account</th><th>Display name</th><th>Balance</th><th>Show on kiosk</th></tr>
+    {{range .Accounts}}
+    <tr>
+      <td>{{.Name}}{{if .OrgName}} <span class="badge">{{.OrgName}}</span>{{end}}{{if .IsCredit}} <span class="badge">credit</span>{{end}}</td>
+      <td>
+        <form class="inline" method="POST" action="">
+          <input type="hidden" name="action" value="set_account_display_name">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <input type="text" name="display_name" value="{{.DisplayName}}" placeholder="{{.Name}}">
+          <button type="submit" class="secondary">Save</button>
+        </form>
+      </td>
+      <td>{{.Balance}}</td>
+      <td>
+        <form class="inline" method="POST" action="">
+          <input type="hidden" name="action" value="toggle_account_visibility">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <input type="hidden" name="visible" value="{{if .Visible}}false{{else}}true{{end}}">
+          <button type="submit" class="secondary">{{if .Visible}}Hide{{else}}Show{{end}}</button>
+        </form>
+      </td>
+    </tr>
+    {{else}}
+    <tr><td colspan="4"><em>No accounts synced yet.</em></td></tr>
+    {{end}}
+  </table>
+
+  <form class="inline" method="POST" action="">
+    <input type="hidden" name="action" value="refresh_simplefin">
+    <button type="submit">Refresh now</button>
+  </form>
+  <form class="inline" method="POST" action="" onsubmit="return confirm('Disconnect SimpleFIN and remove all synced accounts?');">
+    <input type="hidden" name="action" value="disconnect_simplefin">
+    <button type="submit" class="danger">Disconnect</button>
+  </form>
+{{else}}
+  <p>Not connected. Paste a SimpleFIN Bridge setup token to connect a bank/card account.</p>
+  <form method="POST" action="">
+    <input type="hidden" name="action" value="connect_simplefin">
+    <div class="field">
+      <label>Setup token</label>
+      <input type="text" name="setup_token" placeholder="paste your one-time SimpleFIN setup token" required>
+    </div>
+    <button type="submit">Connect</button>
+  </form>
+{{end}}
+{{end}}

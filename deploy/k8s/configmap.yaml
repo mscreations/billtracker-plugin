@@ -1,0 +1,16 @@
+# Non-secret configuration. Anything sensitive (DB creds, ENCRYPTION_KEY)
+# lives in Secrets instead - see secret-example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billtracker-config
+  namespace: billtracker
+data:
+  LISTEN_ADDR: ":8090"
+  LOG_LEVEL: "info" # set to "debug" for verbose troubleshooting logs
+  DB_PORT: "5432"
+  DB_SSLMODE: "disable" # CNPG typically handles TLS internally to the cluster; adjust if your cluster requires "require"/"verify-full"
+  CONFIG_DIR: "/config"
+  BILL_INSTANCE_LOOKAHEAD_DAYS: "60"
+  SIMPLEFIN_REFRESH_INTERVAL_MINUTES: "60"
+  VENDOR_REFRESH_INTERVAL_MINUTES: "360"

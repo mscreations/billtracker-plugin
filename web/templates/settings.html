@@ -1,0 +1,86 @@
+{{/*
+  Top-level GET/POST /settings response - a full HTML document. hhq's
+  ProxySettings relays this verbatim from behind its own parent-auth+CSRF
+  middleware; this plugin is only ever reached through hhq's dashboard at
+  /parent/plugins/bill-tracker/settings, never at its own bare /settings
+  path from a browser. Every <form> below therefore uses action="" (submit
+  to the current URL) rather than a hardcoded absolute path - that's the
+  only way a POST correctly round-trips back through hhq's proxy no matter
+  what path the browser is actually on.
+
+  Same "server-to-server only" reasoning as view.html applies to styling:
+  inline <style>, no linked stylesheet.
+*/}}
+{{define "settings"}}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Bill Tracker Settings</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #14171c; color: #f0f2f5; padding: 2vh 2vw; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 2.5em; border-bottom: 1px solid #2a2f38; padding-bottom: 0.3em; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  td, th { text-align: left; padding: 6px 10px; border-bottom: 1px solid #2a2f38; }
+  .paid { color: #6b7280; text-decoration: line-through; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #2a2f38; color: #9aa3af; margin-left: 6px; }
+  form.inline { display: inline; }
+  input[type=text], input[type=number], input[type=date], input[type=password], select {
+    padding: 6px; border-radius: 4px; border: 1px solid #2a2f38; background: #1b1f26; color: inherit;
+  }
+  button { padding: 6px 12px; border-radius: 4px; border: none; background: #3B82F6; color: white; cursor: pointer; }
+  button.danger { background: #ef4444; }
+  button.secondary { background: #374151; }
+  .msg { padding: 8px 12px; border-radius: 4px; margin-bottom: 16px; }
+  .msg.error { background: #7f1d1d; color: #fecaca; }
+  .msg.success { background: #14532d; color: #bbf7d0; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 13px; color: #9aa3af; margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<h1>Bill Tracker</h1>
+
+{{if .Error}}<div class="msg error">{{.Error}}</div>{{end}}
+{{if .Success}}<div class="msg success">{{.Success}}</div>{{end}}
+
+{{template "settings/_bills_table" .}}
+{{template "settings/_bill_form" .}}
+{{template "settings/_simplefin" .}}
+
+{{if .SimpleFinRefreshing}}
+<script>
+  // The SimpleFIN sync just kicked off in a background goroutine, so this
+  // page was rendered before it finished. Reload once to pick up the
+  // synced accounts/balances. Must navigate via location.href, not
+  // location.reload() - reload() replays the last navigation verbatim
+  // (including this page's own POST body, e.g. setup_token), which would
+  // resubmit connect_simplefin and re-claim an already-claimed token.
+  // Assigning location.href always issues a fresh GET instead.
+  setTimeout(function() { location.href = location.href; }, 3000);
+</script>
+{{end}}
+
+<script>
+  // Shows/hides the schedule-dependent fields (day of month, quarter
+  // rotation, due date) on both the "add bill" form and every per-row
+  // "edit bill" form, based on the selected schedule type.
+  function updateBillScheduleFields(select) {
+    var form = select.closest('form');
+    if (!form) return;
+    var value = select.value;
+    form.querySelectorAll('[data-show-for]').forEach(function(field) {
+      var shownFor = field.dataset.showFor.split(',');
+      field.style.display = shownFor.indexOf(value) !== -1 ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('select.schedule-select').forEach(updateBillScheduleFields);
+  document.addEventListener('change', function(e) {
+    if (e.target.matches('select.schedule-select')) updateBillScheduleFields(e.target);
+  });
+</script>
+
+</body>
+</html>
+{{end}}

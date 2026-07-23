@@ -1,0 +1,20 @@
+{{define "view/_balances"}}
+<h2>Balances</h2>
+{{if .SimpleFinConnected}}
+  {{if .Accounts}}
+  <table class="bt-view-table">
+    <tr><th>Account</th><th>Balance</th></tr>
+    {{range .Accounts}}
+    <tr>
+      <td>{{.Name}}{{if .OrgName}} <span class="bt-balance-org">({{.OrgName}})</span>{{end}}</td>
+      <td>{{.Balance}}</td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}
+  <p class="bt-empty">No visible accounts.</p>
+  {{end}}
+{{else}}
+<p class="bt-empty">Not connected. Connect SimpleFIN in settings.</p>
+{{end}}
+{{end}}

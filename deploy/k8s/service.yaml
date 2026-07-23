@@ -1,0 +1,18 @@
+# A plain ClusterIP Service is deliberately all this needs - unlike hhq,
+# nothing here is exposed via Traefik/Ingress. /manifest, /view, /events,
+# and /settings are only ever fetched server-to-server by hhq itself (see
+# CLAUDE.md's "Why there's no Ingress/IngressRoute" section) - point hhq's
+# plugins.json base_url at this Service's in-cluster DNS name, e.g.
+# http://billtracker.billtracker.svc.cluster.local:8090
+apiVersion: v1
+kind: Service
+metadata:
+  name: billtracker
+  namespace: billtracker
+spec:
+  selector:
+    app: billtracker
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http

@@ -1,0 +1,39 @@
+{{/* Shared input fields for the "edit bill" form (settings/_bills_table.html) - pre-filled from a settingsBillDefRow. The "add bill" form (settings/_bill_form.html) has its own empty-valued copy since there's no row to prefill from there. */}}
+{{define "settings/_bill_fields"}}
+<div class="field">
+  <label>Name</label>
+  <input type="text" name="name" value="{{.Name}}" required>
+</div>
+<div class="field">
+  <label>Amount (USD)</label>
+  <input type="number" name="amount" step="0.01" value="{{.AmountDollars}}" required>
+</div>
+<div class="field">
+  <label>Schedule</label>
+  <select name="schedule" class="schedule-select">
+    <option value="monthly" {{if eq .ScheduleType "monthly"}}selected{{end}}>Monthly</option>
+    <option value="quarterly" {{if eq .ScheduleType "quarterly"}}selected{{end}}>Quarterly</option>
+    <option value="one_off" {{if eq .ScheduleType "one_off"}}selected{{end}}>One-off</option>
+  </select>
+</div>
+<div class="field" data-show-for="monthly,quarterly">
+  <label>Day of month</label>
+  <input type="number" name="day_of_month" min="1" max="31" value="{{.DayOfMonth}}">
+</div>
+<div class="field" data-show-for="quarterly">
+  <label>Quarter rotation</label>
+  <select name="quarter_start_month">
+    <option value="1" {{if eq .QuarterStartMonth "1"}}selected{{end}}>Jan / Apr / Jul / Oct</option>
+    <option value="2" {{if eq .QuarterStartMonth "2"}}selected{{end}}>Feb / May / Aug / Nov</option>
+    <option value="3" {{if eq .QuarterStartMonth "3"}}selected{{end}}>Mar / Jun / Sep / Dec</option>
+  </select>
+</div>
+<div class="field" data-show-for="one_off">
+  <label>Due date</label>
+  <input type="date" name="one_off_date" value="{{.OneOffDate}}">
+</div>
+<div class="field">
+  <label>Vendor bill-pay link (optional)</label>
+  <input type="text" name="vendor_url" value="{{.VendorURL}}" placeholder="https://...">
+</div>
+{{end}}

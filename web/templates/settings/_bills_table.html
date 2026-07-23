@@ -1,0 +1,58 @@
+{{define "settings/_bills_table"}}
+<h2>Bill instances (next 90 days)</h2>
+<table>
+  <tr><th>Name</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr>
+  {{range .Instances}}
+  <tr class="{{if .Paid}}paid{{end}}">
+    <td>{{.Name}}</td>
+    <td>{{.Amount}}</td>
+    <td>{{.Due.Format "2006-01-02"}}</td>
+    <td>{{if .Paid}}Paid{{else}}Unpaid{{end}}</td>
+    <td>
+      {{if not .Paid}}
+      <form class="inline" method="POST" action="">
+        <input type="hidden" name="action" value="mark_paid">
+        <input type="hidden" name="id" value="{{.InstanceID}}">
+        <button type="submit">Mark Paid</button>
+      </form>
+      {{end}}
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5"><em>No bill instances in this window.</em></td></tr>
+  {{end}}
+</table>
+
+<h2>Bills</h2>
+<table>
+  <tr><th>Name</th><th>Amount</th><th>Schedule</th><th>Vendor</th><th></th></tr>
+  {{range .Definitions}}
+  <tr>
+    <td>{{.Name}}{{if .BootstrapManaged}}<span class="badge">bills.json managed</span>{{end}}</td>
+    <td>{{.Amount}}</td>
+    <td>{{.ScheduleDesc}}</td>
+    <td>{{if .VendorURL}}<a href="{{.VendorURL}}" target="_blank" rel="noopener">link</a>{{end}}</td>
+    <td>
+      {{if not .BootstrapManaged}}
+      <details>
+        <summary>Edit</summary>
+        <form method="POST" action="">
+          <input type="hidden" name="action" value="update_bill">
+          <input type="hidden" name="id" value="{{.ID}}">
+          {{template "settings/_bill_fields" .}}
+          <button type="submit">Save</button>
+        </form>
+      </details>
+      <form class="inline" method="POST" action="" onsubmit="return confirm('Delete this bill?');">
+        <input type="hidden" name="action" value="delete_bill">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" class="danger">Delete</button>
+      </form>
+      {{end}}
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5"><em>No bills defined yet.</em></td></tr>
+  {{end}}
+</table>
+{{end}}

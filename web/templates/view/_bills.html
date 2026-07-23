@@ -1,0 +1,18 @@
+{{define "view/_bills"}}
+<h2>Bills Due</h2>
+{{if .Bills}}
+<table class="bt-view-table">
+  <tr><th>Name</th><th>Amount</th><th>Due</th><th>Status</th></tr>
+  {{range .Bills}}
+  <tr class="{{if .Overdue}}overdue{{end}}">
+    <td>{{.Name}}</td>
+    <td>{{.Amount}}</td>
+    <td>{{.Due.Format "Jan 2"}}</td>
+    <td>{{if .Overdue}}Overdue{{else}}Upcoming{{end}}</td>
+  </tr>
+  {{end}}
+</table>
+{{else}}
+<p class="bt-empty">No unpaid bills.</p>
+{{end}}
+{{end}}
