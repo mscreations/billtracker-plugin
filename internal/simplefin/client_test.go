@@ -26,6 +26,17 @@ import (
 	"time"
 )
 
+// withInsecureTestMode relaxes the https-only requirement and the
+// loopback/private-IP dial block (see client.go's InsecureTestMode) so a
+// test can talk to a local, plain-http httptest server. Tests exercising
+// the guard itself (TestClaimSetupTokenRejectsNonHTTPSClaimURL and
+// friends) deliberately don't call this.
+func withInsecureTestMode(t *testing.T) {
+	t.Helper()
+	InsecureTestMode = true
+	t.Cleanup(func() { InsecureTestMode = false })
+}
+
 // hijackTruncate hijacks the connection and writes a response that declares
 // more Content-Length than it actually sends, then closes the connection -
 // the standard trick for forcing a client-side body-read error
@@ -52,6 +63,7 @@ func hijackTruncate(t *testing.T, status string, body string) http.HandlerFunc {
 }
 
 func TestClaimSetupTokenSuccess(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/claim/abc", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -74,6 +86,7 @@ func TestClaimSetupTokenSuccess(t *testing.T) {
 }
 
 func TestClaimSetupTokenTrimsSurroundingWhitespaceOnTokenItself(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/claim/abc", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("https://user:pass@bridge.example.com/access/xyz"))
@@ -127,6 +140,7 @@ func TestClaimSetupTokenNetworkError(t *testing.T) {
 }
 
 func TestClaimSetupTokenBodyReadError(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/claim", hijackTruncate(t, "200 OK", "not enough bytes"))
 	srv := httptest.NewServer(mux)
@@ -140,6 +154,7 @@ func TestClaimSetupTokenBodyReadError(t *testing.T) {
 }
 
 func TestClaimSetupTokenNon200Status(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/claim", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -156,6 +171,7 @@ func TestClaimSetupTokenNon200Status(t *testing.T) {
 }
 
 func TestClaimSetupTokenResponseNotAURL(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/claim", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("not a url \x00 at all"))
@@ -171,6 +187,7 @@ func TestClaimSetupTokenResponseNotAURL(t *testing.T) {
 }
 
 func TestFetchAccountsSuccess(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("balances-only") != "1" {
@@ -236,6 +253,7 @@ func TestFetchAccountsSuccess(t *testing.T) {
 }
 
 func TestFetchAccountsNoBasicAuthWhenNoUserInfo(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		if _, _, ok := r.BasicAuth(); ok {
@@ -255,10 +273,54 @@ func TestFetchAccountsNoBasicAuthWhenNoUserInfo(t *testing.T) {
 	}
 }
 
+func TestClaimSetupTokenRejectsNonHTTPSClaimURL(t *testing.T) {
+	token := base64.StdEncoding.EncodeToString([]byte("http://example.com/claim"))
+	_, err := ClaimSetupToken(context.Background(), token)
+	if err == nil {
+		t.Fatal("expected an error for a non-https claim URL")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Errorf("error should mention https, got: %v", err)
+	}
+}
+
+func TestClaimSetupTokenRejectsLoopbackTarget(t *testing.T) {
+	// A real TLS server on a loopback address - scheme validation passes
+	// (it's https), but safeDialContext must still refuse to dial 127.0.0.1.
+	srv := httptest.NewTLSServer(http.NewServeMux())
+	defer srv.Close()
+
+	token := base64.StdEncoding.EncodeToString([]byte(srv.URL + "/claim"))
+	_, err := ClaimSetupToken(context.Background(), token)
+	if err == nil {
+		t.Fatal("expected an error for a loopback claim target")
+	}
+}
+
 func TestFetchAccountsInvalidAccessURL(t *testing.T) {
 	_, err := FetchAccounts(context.Background(), "http://example.invalid/\nbad")
 	if err == nil {
 		t.Fatal("expected an error for an invalid access URL")
+	}
+}
+
+func TestFetchAccountsRejectsNonHTTPSAccessURL(t *testing.T) {
+	_, err := FetchAccounts(context.Background(), "http://example.com")
+	if err == nil {
+		t.Fatal("expected an error for a non-https access URL")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Errorf("error should mention https, got: %v", err)
+	}
+}
+
+func TestFetchAccountsRejectsLoopbackTarget(t *testing.T) {
+	srv := httptest.NewTLSServer(http.NewServeMux())
+	defer srv.Close()
+
+	_, err := FetchAccounts(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected an error for a loopback access URL")
 	}
 }
 
@@ -270,6 +332,7 @@ func TestFetchAccountsNetworkError(t *testing.T) {
 }
 
 func TestFetchAccountsNon200Status(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -285,6 +348,7 @@ func TestFetchAccountsNon200Status(t *testing.T) {
 }
 
 func TestFetchAccountsInvalidJSON(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("not json"))
@@ -299,6 +363,7 @@ func TestFetchAccountsInvalidJSON(t *testing.T) {
 }
 
 func TestFetchAccountsReportedErrors(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"accounts": [], "errors": ["bad token", "expired"]}`))
@@ -316,6 +381,7 @@ func TestFetchAccountsReportedErrors(t *testing.T) {
 }
 
 func TestFetchAccountsUnparsableBalance(t *testing.T) {
+	withInsecureTestMode(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"accounts": [{"id": "acc-1", "balance": "not-a-number"}]}`))
@@ -330,6 +396,7 @@ func TestFetchAccountsUnparsableBalance(t *testing.T) {
 }
 
 func TestFetchAccountsUnparsableAvailableBalanceIsIgnored(t *testing.T) {
+	withInsecureTestMode(t)
 	// An unparsable available-balance is silently dropped (left nil) rather
 	// than failing the whole account, since the primary balance parsed fine.
 	mux := http.NewServeMux()

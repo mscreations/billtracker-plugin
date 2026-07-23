@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/simplefin"
 )
 
 func TestSettingsPageGETRendersEmptyState(t *testing.T) {
@@ -342,6 +343,8 @@ func TestConnectSimpleFinRejectsInvalidToken(t *testing.T) {
 }
 
 func TestConnectSimpleFinSuccess(t *testing.T) {
+	simplefin.InsecureTestMode = true
+	t.Cleanup(func() { simplefin.InsecureTestMode = false })
 	a := newFullTestApp(t)
 	claim := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("https://user:pass@simplefin.example/access"))
@@ -368,6 +371,8 @@ func TestConnectSimpleFinSuccess(t *testing.T) {
 // would trip that generic 500 branch instead of rendering this specific
 // error message.
 func TestConnectSimpleFinSaveFailure(t *testing.T) {
+	simplefin.InsecureTestMode = true
+	t.Cleanup(func() { simplefin.InsecureTestMode = false })
 	a := newFullTestApp(t)
 	claim := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("https://user:pass@simplefin.example/access"))
