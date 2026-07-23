@@ -32,6 +32,10 @@ import (
 type App struct {
 	Cfg *config.Config
 
+	// Version is stamped at build time via -ldflags (see cmd/server/main.go);
+	// reported by GET /manifest so hhq's parent dashboard can display it.
+	Version string
+
 	BillDefs  *models.BillDefinitionStore
 	Instances *models.BillInstanceStore
 	Accounts  *models.AccountStore

@@ -54,6 +54,10 @@ import (
 	"github.com/mscreations/billtracker-plugin/web"
 )
 
+// Version is stamped at build time via -ldflags (see Makefile/deploy/Dockerfile);
+// reported by GET /manifest so hhq's parent dashboard can display it.
+var Version = "dev"
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -90,6 +94,7 @@ func main() {
 		Vendors:   &models.VendorConnectionStore{DB: conn},
 		Encryptor: encryptor,
 		Templates: tmpl,
+		Version:   Version,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

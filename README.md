@@ -171,6 +171,27 @@ fetched server-to-server by hhq, so their styling is self-contained inline
 plugin's `base_url` may not even be reachable from a parent's browser (e.g.
 a cluster-internal Kubernetes Service DNS name), only from hhq itself.
 
+## Versioning & releases
+
+Versions follow `MAJOR.MINOR.PATCH`, tracked entirely via git tags (no
+committed version file). Work happens on `dev`; every push there is
+automatically tagged with the next patch build (e.g. `1.1.4-dev`) and
+published to GHCR as `ghcr.io/mscreations/billtracker-plugin:1.1.4-dev` /
+`ghcr.io/mscreations/billtracker-plugin:latest-dev`. Promoting `dev` to
+`main` is a manual pull request on GitHub; once merged, an Action tags the
+next minor release (e.g. `1.2.0`), cuts a GitHub Release, publishes
+`ghcr.io/mscreations/billtracker-plugin:1.2.0` / `:latest`, and
+opens+merges a PR syncing `main` back into `dev` so `dev` picks up the new
+line. The plugin reports its running version via `GET /manifest`, which
+hhq's parent dashboard shows in the Plugins card's Version column.
+
+## Development Process
+
+This project was developed with substantial AI assistance (Claude Code).
+All AI-generated changes were reviewed and tested by the maintainer before
+being committed. The automated test suite was written entirely by AI, under
+human review.
+
 ## Known gaps
 
 - **Deriving a bill from a linked SimpleFIN account** (e.g. auto-detecting a
