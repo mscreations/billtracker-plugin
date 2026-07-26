@@ -15,7 +15,11 @@
 
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseBillsBootstrapEmptyIsNoOp(t *testing.T) {
 	entries, err := ParseBillsBootstrap("")
@@ -64,5 +68,55 @@ func TestParseBillsBootstrapEmptyArrayIsEmptyNotNil(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Errorf("len(entries) = %d, want 0", len(entries))
+	}
+}
+
+func TestBillBootstrapResolvePasswordPlainValue(t *testing.T) {
+	e := BillBootstrap{Password: "p"}
+	got, err := e.ResolvePassword()
+	if err != nil {
+		t.Fatalf("ResolvePassword: %v", err)
+	}
+	if got != "p" {
+		t.Errorf("got %q, want %q", got, "p")
+	}
+}
+
+func TestBillBootstrapResolvePasswordFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pw")
+	if err := os.WriteFile(path, []byte("secret-from-file\n"), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	e := BillBootstrap{PasswordFile: path}
+	got, err := e.ResolvePassword()
+	if err != nil {
+		t.Fatalf("ResolvePassword: %v", err)
+	}
+	if got != "secret-from-file" {
+		t.Errorf("got %q, want %q (trailing whitespace should be trimmed)", got, "secret-from-file")
+	}
+}
+
+func TestBillBootstrapResolvePasswordBothSetIsError(t *testing.T) {
+	e := BillBootstrap{Password: "p", PasswordFile: "/some/path"}
+	if _, err := e.ResolvePassword(); err == nil {
+		t.Fatal("expected an error when both password and password_file are set")
+	}
+}
+
+func TestBillBootstrapResolvePasswordMissingFile(t *testing.T) {
+	e := BillBootstrap{PasswordFile: filepath.Join(t.TempDir(), "does-not-exist")}
+	if _, err := e.ResolvePassword(); err == nil {
+		t.Fatal("expected an error for a missing password_file")
+	}
+}
+
+func TestBillBootstrapResolvePasswordNeitherSetReturnsEmpty(t *testing.T) {
+	got, err := (BillBootstrap{}).ResolvePassword()
+	if err != nil {
+		t.Fatalf("ResolvePassword: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
 	}
 }

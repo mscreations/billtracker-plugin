@@ -65,7 +65,13 @@ Bills can be defined two ways, and both persist to the same database:
    instead) - **removing an entry from the file deletes that bill (and its
    history) from the database on the next restart.** A bill with the same
    name already created through the settings UI is left untouched (not
-   overwritten) if it collides with a `bills.json` entry.
+   overwritten) if it collides with a `bills.json` entry. A vendor-managed
+   entry's `password` can instead be given as `password_file` (a path to a
+   file containing just the password, e.g. a Kubernetes Secret volume mount)
+   so `bills.json` itself can live in a plain ConfigMap while individual
+   passwords stay in per-secret files - setting both `password` and
+   `password_file` on the same entry is a startup-time bootstrap error.
+   Either way the password is encrypted before it's stored.
 2. **The settings page** - add/edit/delete bills directly; mark the current
    cycle's instance paid there too.
 
