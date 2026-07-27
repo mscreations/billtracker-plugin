@@ -7,6 +7,7 @@ TAG          ?= latest
 DOCKERFILE   := deploy/Dockerfile
 COVER_FILE   := coverage.out
 VERSION      ?= dev
+VARIANT      ?= dev
 
 .PHONY: help build run test test-verbose coverage coverage-html vet fmt tidy \
         docker-build docker-run docker-push clean
@@ -23,6 +24,7 @@ help:
 	@echo "  fmt            Run gofmt -l on the tree (lists unformatted files)"
 	@echo "  tidy           Run go mod tidy"
 	@echo "  docker-build   Build the container image (context = repo root, not deploy/)"
+	@echo "                 VARIANT=dev builds a shell-capable debug image (default: dev)"
 	@echo "  docker-run     Run the container image locally, env from .env"
 	@echo "  docker-push    Push the container image"
 	@echo "  clean          Remove build artifacts"
@@ -59,7 +61,7 @@ tidy:
 # context must be the repo root, not deploy/ - `docker build deploy/` fails
 # because go.mod isn't visible in that context.
 docker-build:
-	docker build --build-arg VERSION=$(VERSION) -f $(DOCKERFILE) -t $(IMAGE):$(TAG) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg VARIANT=$(VARIANT) -f $(DOCKERFILE) -t $(IMAGE):$(TAG) .
 
 docker-run: docker-build
 	docker run --rm -p 8090:8090 --env-file .env $(IMAGE):$(TAG)
