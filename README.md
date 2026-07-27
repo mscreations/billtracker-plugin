@@ -49,6 +49,7 @@ takes precedence over a built-in default.
 | `BILL_INSTANCE_LOOKAHEAD_DAYS` | `60` | How far ahead recurring bill instances are generated |
 | `SIMPLEFIN_REFRESH_INTERVAL_MINUTES` | `60` | How often account balances are re-fetched from SimpleFIN |
 | `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
+| `LOG_FORMAT` | `text` | `text` or `json` - `json` emits one JSON object per log line (`time`/`level`/`msg`), useful for log aggregators like Loki/Grafana |
 
 ## Defining bills
 
