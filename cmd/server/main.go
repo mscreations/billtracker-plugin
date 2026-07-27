@@ -59,6 +59,8 @@ import (
 var Version = "dev"
 
 func main() {
+	logging.Infof("Bill Tracker plugin starting up (version %s)", Version)
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("loading config: %v", err)
