@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/mscreations/billtracker-plugin/internal/logging"
 )
 
 // formatCents renders integer cents as a "$d.dd" string for display only -
@@ -81,6 +83,7 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 
 	instances, err := a.Instances.ListUpcomingUnpaid(ctx, until)
 	if err != nil {
+		logging.Errorf("view: listing upcoming unpaid bills: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -100,7 +103,9 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 	if _, connErr := a.SimpleFin.Get(ctx); connErr == nil {
 		data.SimpleFinConnected = true
 		accounts, err := a.Accounts.ListVisible(ctx)
-		if err == nil {
+		if err != nil {
+			logging.Errorf("view: listing visible accounts: %v", err)
+		} else {
 			var bankRows, creditRows []viewAccountRow
 			for _, acc := range accounts {
 				row := viewAccountRow{
@@ -121,6 +126,7 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := a.Templates.ExecuteTemplate(w, "view", data); err != nil {
+		logging.Errorf("view: executing template: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

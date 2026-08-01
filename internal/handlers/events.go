@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/mscreations/billtracker-plugin/internal/logging"
 )
 
 type eventActionOut struct {
@@ -66,6 +68,7 @@ func (a *App) Events(w http.ResponseWriter, r *http.Request) {
 
 	instances, err := a.Instances.ListUpcomingUnpaid(r.Context(), to)
 	if err != nil {
+		logging.Errorf("events: listing upcoming unpaid bills: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -90,6 +93,7 @@ func (a *App) Events(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	logging.Debugf("events: returning %d unpaid bill event(s)", len(events))
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"events": events})
 }
@@ -113,26 +117,31 @@ type actionIn struct {
 func (a *App) Action(w http.ResponseWriter, r *http.Request) {
 	actionID := r.PathValue("id")
 	if actionID != "mark_paid" {
+		logging.Warnf("action: unrecognized action id %q requested", actionID)
 		http.NotFound(w, r)
 		return
 	}
 
 	var in actionIn
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		logging.Warnf("action: mark_paid: invalid request body: %v", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	var instanceID int
 	if _, err := fmt.Sscanf(in.UID, "bill-instance-%d", &instanceID); err != nil {
+		logging.Warnf("action: mark_paid: unrecognized event uid %q", in.UID)
 		http.Error(w, "unrecognized event uid", http.StatusBadRequest)
 		return
 	}
 
 	if err := a.Instances.MarkPaid(r.Context(), instanceID); err != nil {
+		logging.Errorf("action: mark_paid: marking instance id=%d paid: %v", instanceID, err)
 		http.Error(w, "marking paid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	logging.Infof("action: mark_paid: instance id=%d marked paid", instanceID)
 	w.WriteHeader(http.StatusOK)
 }
 
