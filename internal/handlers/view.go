@@ -59,9 +59,13 @@ type viewData struct {
 	SimpleFinConnected bool
 }
 
-// View handles GET /view - the full-screen HTML page inlined server-side
-// into hhq's kiosk content region when a parent/child taps the plugin's nav
-// button (see hhq's internal/plugins.FetchView doc comment). Never fetched
+// View handles GET /view/{viewID} - the full-screen HTML page inlined
+// server-side into hhq's kiosk content region when a parent/child taps the
+// plugin's nav button (see hhq's internal/plugins.FetchView doc comment).
+// This plugin only ever registers the one view (see manifest.go's viewID
+// const), so the handler doesn't need to branch on {viewID} at all - it's
+// only present in the route because hhq's contract now supports a plugin
+// registering more than one view. Never fetched
 // by a browser directly, so all styling must be self-contained inline
 // <style>, not a linked stylesheet - same trust/reachability reasoning as
 // the removed widget.html had. Unlike the old widget, this always shows

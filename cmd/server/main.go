@@ -126,7 +126,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /register", app.Register)
 	mux.HandleFunc("GET /manifest", auth(app.Manifest))
-	mux.HandleFunc("GET /view", auth(app.View))
+	mux.HandleFunc("GET /view/{viewID}", auth(app.View))
 	mux.HandleFunc("GET /events", auth(app.Events))
 	mux.HandleFunc("POST /actions/{id}", auth(app.Action))
 	mux.HandleFunc("GET /settings", auth(app.SettingsPage))

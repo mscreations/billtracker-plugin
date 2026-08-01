@@ -14,8 +14,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 // Package handlers implements the Bill Tracker plugin's HTTP contract with
-// hhq: GET /manifest, GET /view, GET /events, GET+POST /settings, GET
-// /healthz - see internal/plugins in the hhq repo for the host-side client.
+// hhq: GET /manifest, GET /view/{viewID}, GET /events, GET+POST /settings,
+// GET /healthz - see internal/plugins in the hhq repo for the host-side
+// client.
 package handlers
 
 import (
