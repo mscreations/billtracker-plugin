@@ -73,36 +73,6 @@ func TestSettingsStoreSetUpsertsExistingKey(t *testing.T) {
 	}
 }
 
-func TestSettingsStoreSetIfAbsent(t *testing.T) {
-	conn := testutil.RequireDB(t)
-	s := &SettingsStore{DB: conn}
-	ctx := t.Context()
-
-	won, err := s.SetIfAbsent(ctx, "plugin_token", "first")
-	if err != nil {
-		t.Fatalf("SetIfAbsent (first): %v", err)
-	}
-	if !won {
-		t.Fatal("expected the first SetIfAbsent call to win")
-	}
-
-	won, err = s.SetIfAbsent(ctx, "plugin_token", "second")
-	if err != nil {
-		t.Fatalf("SetIfAbsent (second): %v", err)
-	}
-	if won {
-		t.Fatal("expected the second SetIfAbsent call to lose")
-	}
-
-	got, err := s.Get(ctx, "plugin_token", "fallback")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if got != "first" {
-		t.Fatalf("Get() = %q, want the winning value %q (loser must not overwrite)", got, "first")
-	}
-}
-
 func TestSettingsStoreQueriesReturnErrorOnCanceledContext(t *testing.T) {
 	conn := testutil.RequireDB(t)
 	s := &SettingsStore{DB: conn}
@@ -115,8 +85,5 @@ func TestSettingsStoreQueriesReturnErrorOnCanceledContext(t *testing.T) {
 	}
 	if err := s.Set(ctx, "any", "value"); err == nil {
 		t.Error("Set: expected error on canceled context")
-	}
-	if _, err := s.SetIfAbsent(ctx, "any", "value"); err == nil {
-		t.Error("SetIfAbsent: expected error on canceled context")
 	}
 }

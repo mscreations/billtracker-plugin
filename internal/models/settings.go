@@ -47,22 +47,3 @@ func (s *SettingsStore) Set(ctx context.Context, key, value string) error {
 	return err
 }
 
-// SetIfAbsent inserts value for key only if key doesn't already have a
-// stored value, returning whether this call's value actually won. Used for
-// the plugin-token self-registration handshake (see internal/handlers.
-// Register), where two racing callers must never both believe they set the
-// authoritative token - the loser must never learn the winner's value, so
-// this deliberately doesn't return what's currently stored on a loss.
-func (s *SettingsStore) SetIfAbsent(ctx context.Context, key, value string) (bool, error) {
-	res, err := s.DB.ExecContext(ctx, `
-		INSERT INTO bt_settings (key, value) VALUES ($1, $2)
-		ON CONFLICT (key) DO NOTHING`, key, value)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}

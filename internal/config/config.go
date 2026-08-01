@@ -65,6 +65,16 @@ type Config struct {
 	// account balances, and logging into a vendor's site is a heavier,
 	// more failure-prone operation worth not hammering.
 	VendorRefreshIntervalMinutes int
+
+	// PluginConnectionSecret gates POST /register (see
+	// internal/handlers/register.go) - hhq must present this exact value
+	// (as the X-Plugin-Connection-Secret header) before this plugin will
+	// issue or reissue a token. Optional: defaults to the same
+	// "hhq-plugin-connection" value hhq itself defaults to, so a
+	// single-family/single-plugin deployment has nothing to hand-generate;
+	// set it explicitly (matching hhq's own PLUGIN_CONNECTION_SECRET) if you
+	// want a real secret.
+	PluginConnectionSecret string
 }
 
 func Load() (*Config, error) {
@@ -81,6 +91,8 @@ func Load() (*Config, error) {
 		ConfigDir: getEnvDefault("CONFIG_DIR", "./.config"),
 
 		EncryptionKey: Getenv("ENCRYPTION_KEY"),
+
+		PluginConnectionSecret: getEnvDefault("PLUGIN_CONNECTION_SECRET", "hhq-plugin-connection"),
 	}
 
 	var err error
