@@ -29,6 +29,7 @@ import (
 	"github.com/mscreations/billtracker-plugin/internal/connectors"
 	"github.com/mscreations/billtracker-plugin/internal/logging"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/release"
 	"github.com/mscreations/billtracker-plugin/internal/simplefin"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 )
@@ -44,6 +45,14 @@ type Scheduler struct {
 	SimpleFin *models.SimpleFinConnectionStore
 	Vendors   *models.VendorConnectionStore
 	Encryptor *util.Encryptor
+
+	// Version is this plugin's own running version (see cmd/server/main.go's
+	// Version var), used only to decide which of GitHub's APIs
+	// runVersionCheck polls - see release.CheckForUpdate.
+	Version string
+	// Releases caches the result of runVersionCheck's periodic GitHub poll,
+	// read by GET /version (see internal/handlers/version.go).
+	Releases *release.Cache
 }
 
 // Run launches every background job and blocks until ctx is cancelled.
@@ -51,7 +60,36 @@ func (s *Scheduler) Run(ctx context.Context) {
 	go s.runInstanceGeneration(ctx)
 	go s.runSimpleFinRefresh(ctx)
 	go s.runVendorRefresh(ctx)
+	go s.runVersionCheck(ctx)
 	<-ctx.Done()
+}
+
+// runVersionCheck periodically polls this plugin's own GitHub repo for a
+// newer published version, mirroring runVendorRefresh's shape (check once
+// immediately on startup, then on a ticker) - drives GET /version's
+// upgradeAvailable/upgradeVersion/changelog fields.
+func (s *Scheduler) runVersionCheck(ctx context.Context) {
+	s.checkVersion(ctx)
+	ticker := time.NewTicker(s.Cfg.VersionCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.checkVersion(ctx)
+		}
+	}
+}
+
+func (s *Scheduler) checkVersion(ctx context.Context) {
+	info, err := release.CheckForUpdate(ctx, release.Repo, s.Version)
+	if err != nil {
+		logging.Debugf("scheduler: checking for a newer version: %v", err)
+		return
+	}
+	s.Releases.Set(info)
+	logging.Debugf("scheduler: latest known version is %s", info.Version)
 }
 
 func (s *Scheduler) runInstanceGeneration(ctx context.Context) {

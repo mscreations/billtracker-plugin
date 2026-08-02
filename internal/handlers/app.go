@@ -24,6 +24,7 @@ import (
 
 	"github.com/mscreations/billtracker-plugin/internal/config"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/release"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 )
 
@@ -43,6 +44,10 @@ type App struct {
 	Settings  *models.SettingsStore
 	SimpleFin *models.SimpleFinConnectionStore
 	Vendors   *models.VendorConnectionStore
+
+	// Releases holds the most recently GitHub-checked version info (see
+	// internal/scheduler's runVersionCheck), read by GET /version.
+	Releases *release.Cache
 
 	Encryptor *util.Encryptor
 	Templates *template.Template

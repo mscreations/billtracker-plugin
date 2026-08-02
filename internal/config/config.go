@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -75,6 +76,13 @@ type Config struct {
 	// set it explicitly (matching hhq's own PLUGIN_CONNECTION_SECRET) if you
 	// want a real secret.
 	PluginConnectionSecret string
+
+	// VersionCheckInterval controls how often this plugin polls its own
+	// GitHub repo (internal/release.Repo) for a newer published version,
+	// reported via GET /version (see internal/handlers/version.go). Mirrors
+	// hhq's own RELEASE_CHECK_INTERVAL_MINUTES default of 24h - a cheap,
+	// infrequent poll, no urgency.
+	VersionCheckInterval time.Duration
 }
 
 func Load() (*Config, error) {
@@ -110,6 +118,12 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid VENDOR_REFRESH_INTERVAL_MINUTES: %w", err)
 	}
+
+	versionCheckMinutes, err := strconv.Atoi(getEnvDefault("VERSION_CHECK_INTERVAL_MINUTES", "1440"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid VERSION_CHECK_INTERVAL_MINUTES: %w", err)
+	}
+	cfg.VersionCheckInterval = time.Duration(versionCheckMinutes) * time.Minute
 
 	if cfg.DBHost == "" || cfg.DBName == "" || cfg.DBUser == "" {
 		return nil, fmt.Errorf("DB_HOST, DB_NAME, and DB_USER must be set")

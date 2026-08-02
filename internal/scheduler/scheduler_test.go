@@ -29,6 +29,7 @@ import (
 	"github.com/mscreations/billtracker-plugin/internal/config"
 	"github.com/mscreations/billtracker-plugin/internal/connectors"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/release"
 	"github.com/mscreations/billtracker-plugin/internal/simplefin"
 	"github.com/mscreations/billtracker-plugin/internal/testutil"
 	"github.com/mscreations/billtracker-plugin/internal/util"
@@ -46,6 +47,7 @@ func newTestScheduler(t *testing.T) *Scheduler {
 			BillInstanceLookaheadDays:       60,
 			SimpleFinRefreshIntervalMinutes: 60,
 			VendorRefreshIntervalMinutes:    360,
+			VersionCheckInterval:            time.Hour,
 		},
 		BillDefs:  &models.BillDefinitionStore{DB: conn},
 		Instances: &models.BillInstanceStore{DB: conn},
@@ -53,6 +55,8 @@ func newTestScheduler(t *testing.T) *Scheduler {
 		SimpleFin: &models.SimpleFinConnectionStore{DB: conn},
 		Vendors:   &models.VendorConnectionStore{DB: conn},
 		Encryptor: encryptor,
+		Version:   "0.0.0-test",
+		Releases:  &release.Cache{},
 	}
 }
 

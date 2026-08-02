@@ -49,6 +49,7 @@ takes precedence over a built-in default.
 | `PLUGIN_CONNECTION_SECRET` | `hhq-plugin-connection` | Shared secret hhq must present on `POST /register` (see "Authenticating hhq" below). Set to the same value as hhq's own `PLUGIN_CONNECTION_SECRET` if you override it |
 | `BILL_INSTANCE_LOOKAHEAD_DAYS` | `60` | How far ahead recurring bill instances are generated |
 | `SIMPLEFIN_REFRESH_INTERVAL_MINUTES` | `60` | How often account balances are re-fetched from SimpleFIN |
+| `VERSION_CHECK_INTERVAL_MINUTES` | `1440` | How often this plugin checks its own GitHub repo for a newer version, reported via `GET /version` (see the endpoint table below) |
 | `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
 | `LOG_FORMAT` | `text` | `text` or `json` - `json` emits one JSON object per log line (`time`/`level`/`msg`), useful for log aggregators like Loki/Grafana |
 
@@ -140,10 +141,11 @@ as calendar events.
 | `/events` | GET | `?from=YYYY-MM-DD&to=YYYY-MM-DD` - synthetic calendar events (unpaid bill due dates) in that window, as JSON |
 | `/settings` | GET, POST | A full HTML settings page, reverse-proxied through hhq's own parent-authenticated dashboard at `/parent/plugins/bill-tracker/settings` - this plugin never sees hhq's login/session, hhq only forwards requests here after its own auth check passes. Every form on this page submits to a relative URL so it round-trips correctly through the proxy regardless of the actual path the browser is on. |
 | `/healthz` | GET | Liveness check, any 2xx - unauthenticated, since Kubernetes' probes send no auth header |
+| `/version` | GET | `{"version": "1.0.0", "upgradeAvailable": true, "upgradeVersion": "1.0.2", "changelog": "feat: Update versioning", "channel": "dev"}` - this plugin's own running version, plus whatever its periodic self-check of its own GitHub repo (`VERSION_CHECK_INTERVAL_MINUTES`) has found. Unauthenticated, like `/healthz` - hhq polls it independently of (and before) having a bearer token, and shows an update-available icon on the parent dashboard when `upgradeAvailable` is true. `channel` is derived from whether the running version ends in `-dev`. hhq never talks to GitHub on this plugin's behalf; this endpoint is what makes that possible. |
 
 ## Authenticating hhq
 
-Every endpoint above except `/register` and `/healthz` requires
+Every endpoint above except `/register`, `/healthz`, and `/version` requires
 `Authorization: Bearer <token>` on every request (`internal/handlers/
 auth_middleware.go`'s `RequireBearerToken`), rejecting anything else with
 `403 Forbidden` (not `401` - see below for why) - otherwise this plugin's
