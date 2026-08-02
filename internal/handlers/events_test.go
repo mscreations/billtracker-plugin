@@ -221,7 +221,7 @@ func TestManifestReturnsExpectedShape(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	if m.ID != pluginID || !m.View.Enabled || !m.ProvidesEvents {
+	if m.ID != pluginID || len(m.Views) != 1 || !m.Views[0].Enabled || m.Views[0].ID != viewID || !m.ProvidesEvents {
 		t.Errorf("unexpected manifest shape: %+v", m)
 	}
 }

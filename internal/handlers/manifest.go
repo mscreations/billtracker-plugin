@@ -21,22 +21,30 @@ import (
 )
 
 type manifestView struct {
+	ID      string `json:"id"`
 	Enabled bool   `json:"enabled"`
 	Label   string `json:"label"`
 	Icon    string `json:"icon"`
 }
 
 type manifest struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	Version        string       `json:"version"`
-	View           manifestView `json:"view"`
-	ProvidesEvents bool         `json:"provides_events"`
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	Version        string         `json:"version"`
+	Views          []manifestView `json:"views"`
+	ProvidesEvents bool           `json:"provides_events"`
 }
 
 const (
 	pluginID   = "bill-tracker"
 	pluginName = "Bill Tracker"
+
+	// viewID is this plugin's one registered view's stable id (hhq's
+	// contract now supports more than one view per plugin - see
+	// Manifest.Views - but this plugin only ever needs the one full-screen
+	// bills view). Routed at GET /view/{viewID}; this plugin only has one
+	// view, so its handler (view.go's View) doesn't need to branch on it.
+	viewID = "bills"
 
 	// viewIcon is a small hand-rolled inline SVG (receipt/dollar icon),
 	// trusted verbatim by hhq and rendered directly into the kiosk nav
@@ -53,10 +61,8 @@ func (a *App) Manifest(w http.ResponseWriter, r *http.Request) {
 		ID:      pluginID,
 		Name:    pluginName,
 		Version: a.Version,
-		View: manifestView{
-			Enabled: true,
-			Label:   "Bills",
-			Icon:    viewIcon,
+		Views: []manifestView{
+			{ID: viewID, Enabled: true, Label: "Bills", Icon: viewIcon},
 		},
 		ProvidesEvents: true,
 	}

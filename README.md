@@ -46,9 +46,12 @@ takes precedence over a built-in default.
 | `DB_SSLMODE` | `disable` | Postgres SSL mode |
 | `CONFIG_DIR` | `./.config` | Directory scanned for `bills.json` on startup |
 | `ENCRYPTION_KEY` | *(required)* | Hex-encoded 32-byte AES-256 key. Used for SimpleFIN access URLs, and to encrypt the shared token this plugin self-issues to hhq (see "Authenticating hhq" below). Generate with `openssl rand -hex 32` |
+| `PLUGIN_CONNECTION_SECRET` | `hhq-plugin-connection` | Shared secret hhq must present on `POST /register` (see "Authenticating hhq" below). Set to the same value as hhq's own `PLUGIN_CONNECTION_SECRET` if you override it |
 | `BILL_INSTANCE_LOOKAHEAD_DAYS` | `60` | How far ahead recurring bill instances are generated |
 | `SIMPLEFIN_REFRESH_INTERVAL_MINUTES` | `60` | How often account balances are re-fetched from SimpleFIN |
+| `VERSION_CHECK_INTERVAL_MINUTES` | `1440` | How often this plugin checks its own GitHub repo for a newer version, reported via `GET /version` (see the endpoint table below) |
 | `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
+| `LOG_FORMAT` | `text` | `text` or `json` - `json` emits one JSON object per log line (`time`/`level`/`msg`), useful for log aggregators like Loki/Grafana |
 
 ## Defining bills
 
@@ -65,7 +68,13 @@ Bills can be defined two ways, and both persist to the same database:
    instead) - **removing an entry from the file deletes that bill (and its
    history) from the database on the next restart.** A bill with the same
    name already created through the settings UI is left untouched (not
-   overwritten) if it collides with a `bills.json` entry.
+   overwritten) if it collides with a `bills.json` entry. A vendor-managed
+   entry's `password` can instead be given as `password_file` (a path to a
+   file containing just the password, e.g. a Kubernetes Secret volume mount)
+   so `bills.json` itself can live in a plain ConfigMap while individual
+   passwords stay in per-secret files - setting both `password` and
+   `password_file` on the same entry is a startup-time bootstrap error.
+   Either way the password is encrypted before it's stored.
 2. **The settings page** - add/edit/delete bills directly; mark the current
    cycle's instance paid there too.
 
@@ -126,39 +135,56 @@ as calendar events.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/register` | POST | One-time self-registration - see "Authenticating hhq" below. Unauthenticated; every other endpoint requires the token this issues. |
+| `/register` | POST | Self-registration/re-registration - see "Authenticating hhq" below. Protected by a shared connection secret, not a bearer token; every other endpoint requires the token this issues. |
 | `/manifest` | GET | Static metadata: display name, widget column span (1/2/3) + position (both settings-UI-configurable), whether this plugin provides calendar events |
 | `/widget` | GET | HTML fragment inlined into the kiosk page (fetched server-to-server by hhq, never by the browser directly) |
 | `/events` | GET | `?from=YYYY-MM-DD&to=YYYY-MM-DD` - synthetic calendar events (unpaid bill due dates) in that window, as JSON |
 | `/settings` | GET, POST | A full HTML settings page, reverse-proxied through hhq's own parent-authenticated dashboard at `/parent/plugins/bill-tracker/settings` - this plugin never sees hhq's login/session, hhq only forwards requests here after its own auth check passes. Every form on this page submits to a relative URL so it round-trips correctly through the proxy regardless of the actual path the browser is on. |
 | `/healthz` | GET | Liveness check, any 2xx - unauthenticated, since Kubernetes' probes send no auth header |
+| `/version` | GET | `{"version": "1.0.0", "upgradeAvailable": true, "upgradeVersion": "1.0.2", "changelog": "feat: Update versioning", "channel": "dev"}` - this plugin's own running version, plus whatever its periodic self-check of its own GitHub repo (`VERSION_CHECK_INTERVAL_MINUTES`) has found. Unauthenticated, like `/healthz` - hhq polls it independently of (and before) having a bearer token, and shows an update-available icon on the parent dashboard when `upgradeAvailable` is true. `channel` is derived from whether the running version ends in `-dev`. hhq never talks to GitHub on this plugin's behalf; this endpoint is what makes that possible. |
 
 ## Authenticating hhq
 
-Every endpoint above except `/register` and `/healthz` requires
+Every endpoint above except `/register`, `/healthz`, and `/version` requires
 `Authorization: Bearer <token>` on every request (`internal/handlers/
 auth_middleware.go`'s `RequireBearerToken`), rejecting anything else with
-`401 Unauthorized` - otherwise this plugin's HTTP port would respond to
-anyone on the network who found it, not just hhq.
+`403 Forbidden` (not `401` - see below for why) - otherwise this plugin's
+HTTP port would respond to anyone on the network who found it, not just hhq.
 
-There's nothing to configure for this: the token is agreed on automatically
-the first time hhq successfully reaches this plugin's `POST /register`
-(unauthenticated, since no token exists yet at that point) - this plugin
-generates one, stores it encrypted in `bt_settings` (`ENCRYPTION_KEY`), and
-returns it; hhq stores the same value encrypted in its own database and
-sends it back on every subsequent request. `/register` only ever succeeds
-once - a second call gets `403 Forbidden` without learning the already-
-issued token. If hhq starts before this plugin is up, it retries `/register`
-every 15 seconds until it succeeds (see hhq's own `internal/handlers/
-plugin_bootstrap.go`), so no particular startup ordering is required.
+`/register` itself is gated by a separate shared **connection secret**, sent
+by hhq as an `X-Plugin-Connection-Secret` header and checked against this
+plugin's own `PLUGIN_CONNECTION_SECRET` env var (default
+`hhq-plugin-connection`, matching hhq's own default - set both to the same
+real value if you want one). A mismatch or missing header is rejected with
+**`401 Unauthorized`** - deliberately different from the `403` the bearer
+check above uses: hhq's `internal/plugins.Register` recognizes 401 from
+`/register` specifically as "the connection secret itself is wrong" (a
+standing misconfiguration retrying won't fix) and logs a pointed message
+telling the operator to check `PLUGIN_CONNECTION_SECRET` on both sides,
+rather than treating it as an ordinary/transient failure. This plugin also
+logs every rejected `/register` attempt itself (never logging the secret
+value) - worth checking these logs first if hhq reports a connection-secret
+mismatch. On a valid secret, this plugin generates a fresh token, stores it
+encrypted in `bt_settings` (`ENCRYPTION_KEY`) - **overwriting whatever token
+was stored before** - and returns it; hhq stores the same value encrypted
+in its own database and sends it back on every subsequent request. Unlike
+an earlier version of this contract, `/register` is not restricted to
+succeeding only once - a valid secret lets it reissue a token any number of
+times, which is what makes automatic recovery (below) possible. If hhq
+starts before this plugin is up, it retries `/register` every 15 seconds
+until it succeeds (see hhq's own `internal/handlers/plugin_bootstrap.go`),
+so no particular startup ordering is required.
 
-**Recovery if hhq and this plugin ever fall out of sync** (e.g. hhq's
-response from `/register` was lost in transit after this plugin had already
-stored a token, so hhq never learned it): there's no automatic recovery.
-Manually delete the `plugin_token` row from this plugin's `bt_settings`
-table to reopen `/register`, and clear the corresponding
-`hhq_plugins.encrypted_token` value in hhq's own database (`NULL` it out) so
-hhq re-registers on its next restart or scheduler tick.
+**Recovery if hhq and this plugin ever fall out of sync** (e.g. this plugin
+was redeployed and lost its stored token, or hhq's response from
+`/register` was lost in transit after this plugin had already stored a
+token) is now **automatic**: any bearer-token check on this plugin's side
+rejects with `403 Forbidden` specifically so hhq recognizes it as "my
+token is no longer valid" and calls `POST /register` again (with the
+connection secret) to get a fresh one, retrying the original request once
+- no manual database surgery needed. (A `401` would not trigger hhq's
+recovery - this is why the bearer check above uses `403` instead of the
+more conventional `401` for an invalid/missing token.)
 
 ## Trust boundary
 

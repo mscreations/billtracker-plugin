@@ -32,13 +32,23 @@ import (
 // bootstrap secret - VENDOR_CONNECTIONS_FILE is meant to point at a
 // Kubernetes Secret-mounted file (via the existing config.Getenv _FILE
 // convention), not a plaintext ConfigMap, mirroring hhq's
-// CALENDAR_ACCOUNTS_FILE bootstrap.
+// CALENDAR_ACCOUNTS_FILE bootstrap. PasswordFile, if set instead of
+// Password, is a path to a file whose contents are the password - see
+// BillBootstrap.PasswordFile/ResolvePassword for the same convention.
 type VendorConnectionBootstrap struct {
-	BillName  string `json:"bill_name"`
-	Connector string `json:"connector"` // registry key, e.g. "billeriq"
-	Tenant    string `json:"tenant"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
+	BillName     string `json:"bill_name"`
+	Connector    string `json:"connector"` // registry key, e.g. "billeriq"
+	Tenant       string `json:"tenant"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	PasswordFile string `json:"password_file,omitempty"`
+}
+
+// ResolvePassword returns the entry's effective password: Password if set,
+// or the trimmed contents of PasswordFile if that's set instead. Returns an
+// error if both are set (ambiguous) or if PasswordFile can't be read.
+func (e VendorConnectionBootstrap) ResolvePassword() (string, error) {
+	return resolvePassword(e.Password, e.PasswordFile)
 }
 
 // ParseVendorConnectionsBootstrap parses the raw contents of the

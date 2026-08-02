@@ -18,6 +18,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 )
 
 // BillBootstrap is one entry in bills.json. Amount is dollars (as written by
@@ -31,11 +33,13 @@ import (
 // OneOffDate are all ignored - the bill's due date and amount are entirely
 // maintained by the scheduler's vendor-refresh job instead (see
 // internal/connectors and internal/models.ScheduleVendor). Tenant/Username/
-// Password are that connector's login; Tenant's meaning is
+// Password (or PasswordFile) are that connector's login; Tenant's meaning is
 // connector-specific (e.g. billeriq's per-utility URL path segment).
-// Because this puts a plaintext password in bills.json, CONFIG_DIR should
-// point at a Kubernetes Secret-mounted volume (not a plain ConfigMap) for
-// any bills.json that has a connector-managed entry.
+// PasswordFile, if set instead of Password, is a path to a file whose
+// contents are the password (e.g. a Kubernetes Secret volume mount) - this
+// lets bills.json itself live in a plain ConfigMap while individual
+// passwords stay in per-secret files. Setting both Password and
+// PasswordFile on the same entry is an error (see ResolvePassword).
 type BillBootstrap struct {
 	Name              string  `json:"name"`
 	Amount            float64 `json:"amount,omitempty"`
@@ -45,10 +49,18 @@ type BillBootstrap struct {
 	OneOffDate        string  `json:"one_off_date,omitempty"`        // YYYY-MM-DD
 	VendorURL         string  `json:"vendor_url,omitempty"`
 
-	Connector string `json:"connector,omitempty"` // internal/connectors registry key, e.g. "billeriq"
-	Tenant    string `json:"tenant,omitempty"`
-	Username  string `json:"username,omitempty"`
-	Password  string `json:"password,omitempty"`
+	Connector    string `json:"connector,omitempty"` // internal/connectors registry key, e.g. "billeriq"
+	Tenant       string `json:"tenant,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	PasswordFile string `json:"password_file,omitempty"`
+}
+
+// ResolvePassword returns the entry's effective password: Password if set,
+// or the trimmed contents of PasswordFile if that's set instead. Returns an
+// error if both are set (ambiguous) or if PasswordFile can't be read.
+func (e BillBootstrap) ResolvePassword() (string, error) {
+	return resolvePassword(e.Password, e.PasswordFile)
 }
 
 // ParseBillsBootstrap parses the raw contents of bills.json.
@@ -61,4 +73,20 @@ func ParseBillsBootstrap(raw string) ([]BillBootstrap, error) {
 		return nil, fmt.Errorf("parsing bills.json: %w", err)
 	}
 	return entries, nil
+}
+
+// resolvePassword implements the shared password/password_file precedence
+// rule for both BillBootstrap and VendorConnectionBootstrap.
+func resolvePassword(password, passwordFile string) (string, error) {
+	if password != "" && passwordFile != "" {
+		return "", fmt.Errorf("password and password_file are mutually exclusive")
+	}
+	if passwordFile == "" {
+		return password, nil
+	}
+	data, err := os.ReadFile(passwordFile)
+	if err != nil {
+		return "", fmt.Errorf("reading password_file %q: %w", passwordFile, err)
+	}
+	return strings.TrimSpace(string(data)), nil
 }

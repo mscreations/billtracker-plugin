@@ -22,10 +22,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mscreations/billtracker-plugin/internal/config"
 	"github.com/mscreations/billtracker-plugin/internal/models"
 	"github.com/mscreations/billtracker-plugin/internal/testutil"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 )
+
+// testConnectionSecret is the value newTestApp configures as
+// Cfg.PluginConnectionSecret - tests that need a valid POST /register call
+// use registerRequest, which stamps this onto the request header.
+const testConnectionSecret = "test-connection-secret"
 
 func newTestApp(t *testing.T) *App {
 	t.Helper()
@@ -35,45 +41,97 @@ func newTestApp(t *testing.T) *App {
 		t.Fatalf("NewEncryptor: %v", err)
 	}
 	return &App{
+		Cfg:       &config.Config{PluginConnectionSecret: testConnectionSecret},
 		Settings:  &models.SettingsStore{DB: conn},
 		Encryptor: encryptor,
 	}
 }
 
-// TestRegisterIssuesATokenOnce is a direct regression test for the
-// self-registration handshake (see register.go): the first POST /register
-// must return a usable token, and every subsequent call must be rejected
-// with 403 rather than issuing (or leaking) a second one.
-func TestRegisterIssuesATokenOnce(t *testing.T) {
+// registerRequest builds a POST /register request carrying the correct
+// connection secret header (see testConnectionSecret).
+func registerRequest() *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/register", nil)
+	req.Header.Set(connectionSecretHeader, testConnectionSecret)
+	return req
+}
+
+// TestRegisterRejectsMissingOrWrongConnectionSecret is a direct regression
+// test for the secret gate in front of /register (see register.go): a
+// missing or incorrect X-Plugin-Connection-Secret header must be rejected
+// with 401 (not 403 - that status is reserved for a stale bearer token on
+// every other route, which triggers hhq's automatic re-registration; a bad
+// connection secret is a standing misconfiguration hhq needs to surface
+// distinctly instead, see hhq's internal/plugins.ErrConnectionSecretMismatch)
+// before any token is touched.
+func TestRegisterRejectsMissingOrWrongConnectionSecret(t *testing.T) {
+	a := newTestApp(t)
+
+	for _, tc := range []struct {
+		name   string
+		secret string
+	}{
+		{"missing header", ""},
+		{"wrong secret", "not-the-real-secret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/register", nil)
+			if tc.secret != "" {
+				req.Header.Set(connectionSecretHeader, tc.secret)
+			}
+			rec := httptest.NewRecorder()
+			a.Register(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401; body: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestRegisterReissuesATokenOnEveryValidCall is a direct regression test for
+// the always-reissue behavior (see register.go): unlike the old one-time-
+// only design, a valid connection secret must succeed on every call,
+// returning a fresh token each time and overwriting the previous one - this
+// is what lets hhq recover automatically after a 403 elsewhere.
+func TestRegisterReissuesATokenOnEveryValidCall(t *testing.T) {
 	a := newTestApp(t)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/register", nil)
-	a.Register(rec, req)
-
+	a.Register(rec, registerRequest())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("first /register status = %d, want 200; body: %s", rec.Code, rec.Body.String())
 	}
-	var resp registerResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	var first registerResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	if resp.Token == "" {
+	if first.Token == "" {
 		t.Fatal("expected a non-empty token")
 	}
 
-	// A second registration attempt must fail - the plugin only ever answers
-	// /register successfully once.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodPost, "/register", nil)
-	a.Register(rec2, req2)
-
-	if rec2.Code != http.StatusForbidden {
-		t.Fatalf("second /register status = %d, want 403; body: %s", rec2.Code, rec2.Body.String())
+	a.Register(rec2, registerRequest())
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second /register status = %d, want 200 (valid secret reissues); body: %s", rec2.Code, rec2.Body.String())
 	}
-	// The losing caller must never learn the winning token.
-	if strings.Contains(rec2.Body.String(), resp.Token) {
-		t.Fatal("the rejected second registration response leaked the first token")
+	var second registerResponse
+	if err := json.Unmarshal(rec2.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if second.Token == "" || second.Token == first.Token {
+		t.Fatalf("expected a distinct fresh token on reissue, got %q (first was %q)", second.Token, first.Token)
+	}
+
+	// The old token must no longer authenticate - only the freshly issued one.
+	handler := a.RequireBearerToken(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	oldReq := httptest.NewRequest(http.MethodGet, "/manifest", nil)
+	oldReq.Header.Set("Authorization", "Bearer "+first.Token)
+	oldRec := httptest.NewRecorder()
+	handler(oldRec, oldReq)
+	if oldRec.Code != http.StatusForbidden {
+		t.Fatalf("old token status = %d, want 403 after reissue", oldRec.Code)
 	}
 }
 
@@ -95,8 +153,8 @@ func TestRequireBearerTokenRejectsUntilRegistered(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer whatever-anyone-might-guess")
 	handler(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401 before registration", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 before registration", rec.Code)
 	}
 	if called {
 		t.Fatal("the wrapped handler must not run before registration")
@@ -106,12 +164,12 @@ func TestRequireBearerTokenRejectsUntilRegistered(t *testing.T) {
 // TestRequireBearerTokenAcceptsCorrectTokenAfterRegistration and its sibling
 // below are direct regression tests for the transport mechanism every other
 // endpoint relies on: correct token in, handler runs; wrong or missing
-// token, 401 and the handler never runs.
+// token, 403 and the handler never runs.
 func TestRequireBearerTokenAcceptsCorrectTokenAfterRegistration(t *testing.T) {
 	a := newTestApp(t)
 
 	rec := httptest.NewRecorder()
-	a.Register(rec, httptest.NewRequest(http.MethodPost, "/register", nil))
+	a.Register(rec, registerRequest())
 	var resp registerResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decoding register response: %v", err)
@@ -140,7 +198,7 @@ func TestRequireBearerTokenRejectsWrongTokenAfterRegistration(t *testing.T) {
 	a := newTestApp(t)
 
 	rec := httptest.NewRecorder()
-	a.Register(rec, httptest.NewRequest(http.MethodPost, "/register", nil))
+	a.Register(rec, registerRequest())
 	var resp registerResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decoding register response: %v", err)
@@ -169,8 +227,8 @@ func TestRequireBearerTokenRejectsWrongTokenAfterRegistration(t *testing.T) {
 			rec := httptest.NewRecorder()
 			handler(rec, req)
 
-			if rec.Code != http.StatusUnauthorized {
-				t.Errorf("status = %d, want 401", rec.Code)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("status = %d, want 403", rec.Code)
 			}
 			if called {
 				t.Error("the wrapped handler must not run without a valid token")

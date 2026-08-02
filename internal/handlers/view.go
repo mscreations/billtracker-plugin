@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/mscreations/billtracker-plugin/internal/logging"
 )
 
 // formatCents renders integer cents as a "$d.dd" string for display only -
@@ -59,9 +61,13 @@ type viewData struct {
 	SimpleFinConnected bool
 }
 
-// View handles GET /view - the full-screen HTML page inlined server-side
-// into hhq's kiosk content region when a parent/child taps the plugin's nav
-// button (see hhq's internal/plugins.FetchView doc comment). Never fetched
+// View handles GET /view/{viewID} - the full-screen HTML page inlined
+// server-side into hhq's kiosk content region when a parent/child taps the
+// plugin's nav button (see hhq's internal/plugins.FetchView doc comment).
+// This plugin only ever registers the one view (see manifest.go's viewID
+// const), so the handler doesn't need to branch on {viewID} at all - it's
+// only present in the route because hhq's contract now supports a plugin
+// registering more than one view. Never fetched
 // by a browser directly, so all styling must be self-contained inline
 // <style>, not a linked stylesheet - same trust/reachability reasoning as
 // the removed widget.html had. Unlike the old widget, this always shows
@@ -77,6 +83,7 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 
 	instances, err := a.Instances.ListUpcomingUnpaid(ctx, until)
 	if err != nil {
+		logging.Errorf("view: listing upcoming unpaid bills: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -96,7 +103,9 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 	if _, connErr := a.SimpleFin.Get(ctx); connErr == nil {
 		data.SimpleFinConnected = true
 		accounts, err := a.Accounts.ListVisible(ctx)
-		if err == nil {
+		if err != nil {
+			logging.Errorf("view: listing visible accounts: %v", err)
+		} else {
 			var bankRows, creditRows []viewAccountRow
 			for _, acc := range accounts {
 				row := viewAccountRow{
@@ -117,6 +126,7 @@ func (a *App) View(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := a.Templates.ExecuteTemplate(w, "view", data); err != nil {
+		logging.Errorf("view: executing template: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

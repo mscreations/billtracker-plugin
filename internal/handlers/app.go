@@ -14,8 +14,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 // Package handlers implements the Bill Tracker plugin's HTTP contract with
-// hhq: GET /manifest, GET /view, GET /events, GET+POST /settings, GET
-// /healthz - see internal/plugins in the hhq repo for the host-side client.
+// hhq: GET /manifest, GET /view/{viewID}, GET /events, GET+POST /settings,
+// GET /healthz - see internal/plugins in the hhq repo for the host-side
+// client.
 package handlers
 
 import (
@@ -23,6 +24,7 @@ import (
 
 	"github.com/mscreations/billtracker-plugin/internal/config"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/release"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 )
 
@@ -42,6 +44,10 @@ type App struct {
 	Settings  *models.SettingsStore
 	SimpleFin *models.SimpleFinConnectionStore
 	Vendors   *models.VendorConnectionStore
+
+	// Releases holds the most recently GitHub-checked version info (see
+	// internal/scheduler's runVersionCheck), read by GET /version.
+	Releases *release.Cache
 
 	Encryptor *util.Encryptor
 	Templates *template.Template

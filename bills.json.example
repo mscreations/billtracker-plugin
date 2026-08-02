@@ -24,5 +24,12 @@
     "amount": 612.00,
     "schedule": "one_off",
     "one_off_date": "2026-09-01"
+  },
+  {
+    "name": "West View Water Authority",
+    "connector": "billeriq",
+    "tenant": "WVWAuthority",
+    "username": "username",
+    "password_file": "/var/run/secrets/wvwa_password"
   }
 ]

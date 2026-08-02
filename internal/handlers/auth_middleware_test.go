@@ -68,12 +68,12 @@ func TestCurrentTokenRejectsUndecryptableStoredValue(t *testing.T) {
 // two rand-consuming steps so only one can be faulted at a time), which
 // isn't warranted just to reach one defensive line.
 
-func TestRegisterReturnsServerErrorOnSetIfAbsentFailure(t *testing.T) {
+func TestRegisterReturnsServerErrorOnSettingsStoreFailure(t *testing.T) {
 	a := newTestApp(t)
 	a.Settings = &models.SettingsStore{DB: brokenBTDB(t)}
 
 	rec := httptest.NewRecorder()
-	a.Register(rec, httptest.NewRequest(http.MethodPost, "/register", nil))
+	a.Register(rec, registerRequest())
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500; body: %s", rec.Code, rec.Body.String())

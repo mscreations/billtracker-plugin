@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mscreations/billtracker-plugin/internal/logging"
 	"github.com/mscreations/billtracker-plugin/internal/models"
 	"github.com/mscreations/billtracker-plugin/internal/scheduler"
 	"github.com/mscreations/billtracker-plugin/internal/simplefin"
@@ -107,15 +108,22 @@ func (a *App) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 	data, err := a.buildSettingsPageData(ctx)
 	if err != nil {
+		logging.Errorf("settings: building page data: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	data.Error = pageErr
 	data.Success = pageSuccess
 	data.SimpleFinRefreshing = refreshing
+	if pageErr != "" {
+		logging.Warnf("settings: action %q failed: %s", r.FormValue("action"), pageErr)
+	} else if r.Method == http.MethodPost {
+		logging.Infof("settings: action %q succeeded: %s", r.FormValue("action"), pageSuccess)
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := a.Templates.ExecuteTemplate(w, "settings", data); err != nil {
+		logging.Errorf("settings: executing template: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

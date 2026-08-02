@@ -24,6 +24,7 @@
 //	GET  /settings  - a full HTML settings page, proxied through hhq's own
 //	POST /settings  -   parent-authenticated dashboard (see ProxySettings)
 //	GET  /healthz   - liveness check
+//	GET  /version   - this plugin's own version + upgrade-available check
 //
 // Bills are defined either via CONFIG_DIR/bills.json (bootstrap, reconciled
 // on every startup) or the settings page - both persist to this plugin's
@@ -49,6 +50,7 @@ import (
 	"github.com/mscreations/billtracker-plugin/internal/handlers"
 	"github.com/mscreations/billtracker-plugin/internal/logging"
 	"github.com/mscreations/billtracker-plugin/internal/models"
+	"github.com/mscreations/billtracker-plugin/internal/release"
 	"github.com/mscreations/billtracker-plugin/internal/scheduler"
 	"github.com/mscreations/billtracker-plugin/internal/util"
 	"github.com/mscreations/billtracker-plugin/web"
@@ -59,6 +61,8 @@ import (
 var Version = "dev"
 
 func main() {
+	logging.Infof("Bill Tracker plugin starting up (version %s)", Version)
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("loading config: %v", err)
@@ -84,6 +88,8 @@ func main() {
 		log.Fatalf("parsing templates: %v", err)
 	}
 
+	releaseCache := &release.Cache{}
+
 	app := &handlers.App{
 		Cfg:       cfg,
 		BillDefs:  &models.BillDefinitionStore{DB: conn},
@@ -92,6 +98,7 @@ func main() {
 		Settings:  &models.SettingsStore{DB: conn},
 		SimpleFin: &models.SimpleFinConnectionStore{DB: conn},
 		Vendors:   &models.VendorConnectionStore{DB: conn},
+		Releases:  releaseCache,
 		Encryptor: encryptor,
 		Templates: tmpl,
 		Version:   Version,
@@ -110,26 +117,31 @@ func main() {
 		SimpleFin: app.SimpleFin,
 		Vendors:   app.Vendors,
 		Encryptor: app.Encryptor,
+		Version:   Version,
+		Releases:  releaseCache,
 	}
 	go sched.Run(ctx)
 
-	// Every route except /register and /healthz requires hhq's shared bearer
-	// token (see app.RequireBearerToken). /register is how that token gets
-	// issued in the first place - see internal/handlers/register.go, and
-	// this repo's CLAUDE.md for the full self-registration flow. /healthz
-	// stays open since it's polled by Kubernetes' own liveness probe, which
-	// sends no auth header.
+	// Every route except /register, /healthz, and /version requires hhq's
+	// shared bearer token (see app.RequireBearerToken). /register is how
+	// that token gets issued in the first place - see
+	// internal/handlers/register.go, and this repo's CLAUDE.md for the full
+	// self-registration flow. /healthz stays open since it's polled by
+	// Kubernetes' own liveness probe, which sends no auth header. /version
+	// stays open too - hhq polls it independently of (and before) having a
+	// token, the same way it checks /healthz.
 	auth := app.RequireBearerToken
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /register", app.Register)
 	mux.HandleFunc("GET /manifest", auth(app.Manifest))
-	mux.HandleFunc("GET /view", auth(app.View))
+	mux.HandleFunc("GET /view/{viewID}", auth(app.View))
 	mux.HandleFunc("GET /events", auth(app.Events))
 	mux.HandleFunc("POST /actions/{id}", auth(app.Action))
 	mux.HandleFunc("GET /settings", auth(app.SettingsPage))
 	mux.HandleFunc("POST /settings", auth(app.SettingsPage))
 	mux.HandleFunc("GET /healthz", app.Healthz)
+	mux.HandleFunc("GET /version", app.GetVersion)
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,

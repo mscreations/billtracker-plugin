@@ -42,8 +42,12 @@ func (a *App) BootstrapVendorConnections(ctx context.Context, entries []config.V
 }
 
 func (a *App) bootstrapVendorConnection(ctx context.Context, entry config.VendorConnectionBootstrap) error {
-	if entry.BillName == "" || entry.Connector == "" || entry.Username == "" || entry.Password == "" {
-		return fmt.Errorf("bill_name, connector, username, and password are all required")
+	password, err := entry.ResolvePassword()
+	if err != nil {
+		return fmt.Errorf("invalid password/password_file: %w", err)
+	}
+	if entry.BillName == "" || entry.Connector == "" || entry.Username == "" || password == "" {
+		return fmt.Errorf("bill_name, connector, username, and password (or password_file) are all required")
 	}
 
 	def, err := a.BillDefs.GetByName(ctx, entry.BillName)
@@ -54,7 +58,7 @@ func (a *App) bootstrapVendorConnection(ctx context.Context, entry config.Vendor
 		return fmt.Errorf("looking up bill %q: %w", entry.BillName, err)
 	}
 
-	encryptedPassword, err := a.Encryptor.Encrypt(entry.Password)
+	encryptedPassword, err := a.Encryptor.Encrypt(password)
 	if err != nil {
 		return fmt.Errorf("encrypting password: %w", err)
 	}
