@@ -113,12 +113,17 @@ func (a *App) BootstrapBills(ctx context.Context, entries []config.BillBootstrap
 // instance are populated right away - same "don't wait for the next tick"
 // pattern as syncAccountAsync on the hhq side.
 func (a *App) attachVendorConnection(ctx context.Context, sched *scheduler.Scheduler, billDefID int, entry config.BillBootstrap) {
+	username, err := entry.ResolveUsername()
+	if err != nil {
+		logging.Errorf("bootstrap: bill %q has an invalid username/username_file: %v", entry.Name, err)
+		return
+	}
 	password, err := entry.ResolvePassword()
 	if err != nil {
 		logging.Errorf("bootstrap: bill %q has an invalid password/password_file: %v", entry.Name, err)
 		return
 	}
-	if entry.Username == "" || password == "" {
+	if username == "" || password == "" {
 		logging.Errorf("bootstrap: bill %q has a connector but is missing username/password", entry.Name)
 		return
 	}
@@ -133,7 +138,7 @@ func (a *App) attachVendorConnection(ctx context.Context, sched *scheduler.Sched
 		BillDefinitionID:  billDefID,
 		Connector:         entry.Connector,
 		Tenant:            entry.Tenant,
-		Username:          entry.Username,
+		Username:          username,
 		EncryptedPassword: encryptedPassword,
 		BootstrapManaged:  true,
 	}); err != nil {

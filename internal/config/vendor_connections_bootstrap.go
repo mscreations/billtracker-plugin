@@ -40,6 +40,7 @@ type VendorConnectionBootstrap struct {
 	Connector    string `json:"connector"` // registry key, e.g. "billeriq"
 	Tenant       string `json:"tenant"`
 	Username     string `json:"username"`
+	UsernameFile string `json:"username_file,omitempty"`
 	Password     string `json:"password"`
 	PasswordFile string `json:"password_file,omitempty"`
 }
@@ -48,7 +49,14 @@ type VendorConnectionBootstrap struct {
 // or the trimmed contents of PasswordFile if that's set instead. Returns an
 // error if both are set (ambiguous) or if PasswordFile can't be read.
 func (e VendorConnectionBootstrap) ResolvePassword() (string, error) {
-	return resolvePassword(e.Password, e.PasswordFile)
+	return resolveBootstrapField("password", e.Password, e.PasswordFile)
+}
+
+// ResolveUsername returns the entry's effective username: Username if set,
+// or the trimmed contents of UsernameFile if that's set instead. Same
+// mutual-exclusion/error behavior as ResolvePassword.
+func (e VendorConnectionBootstrap) ResolveUsername() (string, error) {
+	return resolveBootstrapField("username", e.Username, e.UsernameFile)
 }
 
 // ParseVendorConnectionsBootstrap parses the raw contents of the

@@ -52,6 +52,7 @@ type BillBootstrap struct {
 	Connector    string `json:"connector,omitempty"` // internal/connectors registry key, e.g. "billeriq"
 	Tenant       string `json:"tenant,omitempty"`
 	Username     string `json:"username,omitempty"`
+	UsernameFile string `json:"username_file,omitempty"`
 	Password     string `json:"password,omitempty"`
 	PasswordFile string `json:"password_file,omitempty"`
 }
@@ -60,7 +61,14 @@ type BillBootstrap struct {
 // or the trimmed contents of PasswordFile if that's set instead. Returns an
 // error if both are set (ambiguous) or if PasswordFile can't be read.
 func (e BillBootstrap) ResolvePassword() (string, error) {
-	return resolvePassword(e.Password, e.PasswordFile)
+	return resolveBootstrapField("password", e.Password, e.PasswordFile)
+}
+
+// ResolveUsername returns the entry's effective username: Username if set,
+// or the trimmed contents of UsernameFile if that's set instead. Same
+// mutual-exclusion/error behavior as ResolvePassword.
+func (e BillBootstrap) ResolveUsername() (string, error) {
+	return resolveBootstrapField("username", e.Username, e.UsernameFile)
 }
 
 // ParseBillsBootstrap parses the raw contents of bills.json.
@@ -75,18 +83,20 @@ func ParseBillsBootstrap(raw string) ([]BillBootstrap, error) {
 	return entries, nil
 }
 
-// resolvePassword implements the shared password/password_file precedence
-// rule for both BillBootstrap and VendorConnectionBootstrap.
-func resolvePassword(password, passwordFile string) (string, error) {
-	if password != "" && passwordFile != "" {
-		return "", fmt.Errorf("password and password_file are mutually exclusive")
+// resolveBootstrapField implements the shared value/value_file precedence
+// rule used by ResolvePassword/ResolveUsername on both BillBootstrap and
+// VendorConnectionBootstrap. field is the JSON field name (e.g. "password"),
+// used only to make error messages self-explanatory.
+func resolveBootstrapField(field, value, file string) (string, error) {
+	if value != "" && file != "" {
+		return "", fmt.Errorf("%s and %s_file are mutually exclusive", field, field)
 	}
-	if passwordFile == "" {
-		return password, nil
+	if file == "" {
+		return value, nil
 	}
-	data, err := os.ReadFile(passwordFile)
+	data, err := os.ReadFile(file)
 	if err != nil {
-		return "", fmt.Errorf("reading password_file %q: %w", passwordFile, err)
+		return "", fmt.Errorf("reading %s_file %q: %w", field, file, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }

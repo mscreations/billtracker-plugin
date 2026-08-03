@@ -42,12 +42,16 @@ func (a *App) BootstrapVendorConnections(ctx context.Context, entries []config.V
 }
 
 func (a *App) bootstrapVendorConnection(ctx context.Context, entry config.VendorConnectionBootstrap) error {
+	username, err := entry.ResolveUsername()
+	if err != nil {
+		return fmt.Errorf("invalid username/username_file: %w", err)
+	}
 	password, err := entry.ResolvePassword()
 	if err != nil {
 		return fmt.Errorf("invalid password/password_file: %w", err)
 	}
-	if entry.BillName == "" || entry.Connector == "" || entry.Username == "" || password == "" {
-		return fmt.Errorf("bill_name, connector, username, and password (or password_file) are all required")
+	if entry.BillName == "" || entry.Connector == "" || username == "" || password == "" {
+		return fmt.Errorf("bill_name, connector, username (or username_file), and password (or password_file) are all required")
 	}
 
 	def, err := a.BillDefs.GetByName(ctx, entry.BillName)
@@ -67,7 +71,7 @@ func (a *App) bootstrapVendorConnection(ctx context.Context, entry config.Vendor
 		BillDefinitionID:  def.ID,
 		Connector:         entry.Connector,
 		Tenant:            entry.Tenant,
-		Username:          entry.Username,
+		Username:          username,
 		EncryptedPassword: encryptedPassword,
 		BootstrapManaged:  true,
 	}); err != nil {
