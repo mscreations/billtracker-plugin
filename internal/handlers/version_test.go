@@ -41,6 +41,9 @@ func TestGetVersionDefaultResponseBeforeAnyPoll(t *testing.T) {
 	if resp.Version != "1.2.0" || resp.UpgradeAvailable || resp.Channel != "release" {
 		t.Errorf("got %+v", resp)
 	}
+	if resp.Checked {
+		t.Error("expected Checked=false before any poll has completed")
+	}
 }
 
 func TestGetVersionReportsUpgradeAvailableFromCache(t *testing.T) {
@@ -58,6 +61,9 @@ func TestGetVersionReportsUpgradeAvailableFromCache(t *testing.T) {
 	}
 	if !resp.UpgradeAvailable || resp.UpgradeVersion != "1.3.0" || resp.Changelog != "feat: something new" {
 		t.Errorf("got %+v", resp)
+	}
+	if !resp.Checked {
+		t.Error("expected Checked=true once the cache has a value")
 	}
 }
 

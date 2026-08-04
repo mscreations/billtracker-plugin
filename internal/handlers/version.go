@@ -29,6 +29,12 @@ type versionResponse struct {
 	UpgradeVersion   string `json:"upgradeVersion"`
 	Changelog        string `json:"changelog"`
 	Channel          string `json:"channel"`
+	// Checked is false until the scheduler's first GitHub poll (see
+	// internal/scheduler's runVersionCheck) has completed - lets hhq tell
+	// "no update, confirmed" apart from "haven't looked yet" (e.g. right at
+	// startup, before the first background check has finished) so it knows
+	// whether to trust upgradeAvailable=false or come back and ask again soon.
+	Checked bool `json:"checked"`
 }
 
 // Version handles GET /version - unauthenticated, like /healthz, since hhq
@@ -45,10 +51,13 @@ func (a *App) GetVersion(w http.ResponseWriter, r *http.Request) {
 
 	resp := versionResponse{Version: a.Version, Channel: channel}
 	if a.Releases != nil {
-		if info, ok := a.Releases.Get(); ok && release.IsNewer(a.Version, info.Version) {
-			resp.UpgradeAvailable = true
-			resp.UpgradeVersion = info.Version
-			resp.Changelog = info.Changelog
+		if info, ok := a.Releases.Get(); ok {
+			resp.Checked = true
+			if release.IsNewer(a.Version, info.Version) {
+				resp.UpgradeAvailable = true
+				resp.UpgradeVersion = info.Version
+				resp.Changelog = info.Changelog
+			}
 		}
 	}
 
