@@ -29,7 +29,7 @@
     "name": "West View Water Authority",
     "connector": "billeriq",
     "tenant": "WVWAuthority",
-    "username": "username",
+    "username_file": "/var/run/secrets/wvwa_user",
     "password_file": "/var/run/secrets/wvwa_password"
   }
 ]
